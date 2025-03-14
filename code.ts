@@ -24,9 +24,13 @@ const getClipboardHtml = () => `
 </html>
 `;
 
+const shouldExpandComponents = true;
+
+type TNode = BaseNode | InstanceNode | ComponentNode | FrameNode
+
 const processorMap =
 {
-  'processDescription': async (node: BaseNode | InstanceNode | ComponentNode) => {
+  'processDescription': async (node: TNode) => {
     if (node.type === 'INSTANCE') {
       const mainComponent = await node.getMainComponentAsync();
       return {
@@ -38,7 +42,7 @@ const processorMap =
       description: "No description provided"
     };
   },
-  'processLinks': async (node: BaseNode | InstanceNode | ComponentNode) => {
+  'processLinks': async (node: TNode) => {
     if (node.type === 'INSTANCE') {
       const mainComponent = await node.getMainComponentAsync();
       return {
@@ -50,8 +54,64 @@ const processorMap =
       links: "No links provided"
     };
   },
-  'processStyles': async (node: BaseNode | InstanceNode | ComponentNode) => {
+  'processStyles': async (node: TNode) => {
     const styleInfo: Record<string, unknown> = {};
+
+    const hasCss = 'getCSSAsync' in node;
+
+    // Process CSS styles from dev mode
+    if ('getCSSAsync' in node) {
+      try {
+        const cssStyles = await (node as FrameNode).getCSSAsync();
+        styleInfo.css = cssStyles;
+      } catch (err) {
+        console.error('Failed to get CSS styles:', err);
+        styleInfo.css = 'Unable to retrieve CSS styles';
+      }
+    }
+    
+    // Try to get computed styles if available
+    if (!hasCss && 'getComputedStyleAsync' in node) {
+    
+      try {
+        const computedStyles = await (node as any).getComputedStyleAsync();
+        styleInfo.computedStyles = computedStyles;
+      } catch (err) {
+        console.error('Failed to get computed styles:', err);
+      }
+    }
+
+    // Process auto layout properties
+    if ('layoutMode' in node) {
+      styleInfo.layout = {
+        mode: node.layoutMode, // 'HORIZONTAL' or 'VERTICAL' or 'NONE'
+        primaryAxisSizingMode: node.primaryAxisSizingMode,
+        counterAxisSizingMode: node.counterAxisSizingMode,
+        primaryAxisAlignItems: node.primaryAxisAlignItems,
+        counterAxisAlignItems: node.counterAxisAlignItems,
+        paddingBetweenItems: node.itemSpacing,
+        flex: {
+          direction: node.layoutMode === 'HORIZONTAL' ? 'row' : 'column',
+          justifyContent: node.primaryAxisAlignItems,
+          alignItems: node.counterAxisAlignItems,
+          gap: node.itemSpacing
+        }
+      };
+    }
+
+    // Process size constraints
+    if ('constraints' in node) {
+      styleInfo.constraints = node.constraints;
+    }
+
+    // Process max dimensions
+    if ('maxWidth' in node) {
+      styleInfo.maxWidth = node.maxWidth;
+    }
+
+    if ('maxHeight' in node) {
+      styleInfo.maxHeight = node.maxHeight;
+    }
 
     // Process background styles
     if ('fills' in node) {
@@ -125,7 +185,7 @@ const processorMap =
       styles: Object.keys(styleInfo).length > 0 ? styleInfo : "No styles provided"
     };
   },
-  processText: async (node: BaseNode | InstanceNode | ComponentNode) => {
+  processText: async (node: TNode) => {
     if (node.type === 'TEXT') {
       return {
         text: node.characters
@@ -136,19 +196,47 @@ const processorMap =
       text: undefined
     };
   },
-  processChildren: async (node: BaseNode | InstanceNode | ComponentNode) => {
-    if (node.type === 'INSTANCE') {
-      const mainComponent = await node.getMainComponentAsync();
+  processChildren: async (node: TNode) => {
+    const process = async (children: TNode[]) => await Promise.all(children?.map(async (child) => convertTree(child, processorMap)))
+
+    if ((node as FrameNode).annotations?.find(annotation => annotation.label === 'skip')) {
+      console.warn('Skipping node', node.name);
       return {
-        children: mainComponent?.children || []
+        children: []
       };
     }
 
+    if (node.type === 'INSTANCE') {
+      const mainComponent = await node.getMainComponentAsync();
+
+      if (!shouldExpandComponents) {
+        return {
+          children: (mainComponent?.children as TNode[] ?? []).map(child => ({
+            type: 'INSTANCE',
+            name: child.name,
+            children: []
+          }))
+        };
+      }
+
+      return {
+        children: await process(mainComponent?.children as TNode[] ?? [])
+      };
+    }
+
+    if (node.type === 'TEXT') {
+      return {
+        text: node.characters
+      };
+    }
+
+    
+
     return {
-      children: []
+      children: await process((node as FrameNode).children as TNode[] ?? [])
     };
   },
-  processName: async (node: BaseNode | InstanceNode | ComponentNode) => {
+  processName: async (node: TNode) => {
     return {
       name: node.name
     };
@@ -170,7 +258,7 @@ const convertTree = async (_node: BaseNode | InstanceNode | ComponentNode, proce
   let result: TFigmaNode = {} as TFigmaNode;
 
   for (const [processorName, processor] of Object.entries(processorMap)) {
-    console.log({ processorName });
+    console.log({ processorName, test: 1 });
     const processorResult = await processor(_node);
     result = { ...result, ...processorResult };
   }
@@ -180,36 +268,12 @@ const convertTree = async (_node: BaseNode | InstanceNode | ComponentNode, proce
 
 
 const DEFAULT_DESCRIPTION =
-  "This is figma design for real-world medium alternative Conduit app (also known as the mother of all apps).";
+  "This is figma design for a website. Genereate scss and pug for the following component tree";
 
 const COMPONENT_GUIDELINES = `
-- We use TypeScript
-- We only create view layer, no business logic or state management
-- We use Tailwind CSS for styling
-- We use React for the view layer
+- We use scss for styling
+- We use pug for the view layer
 - We use the Figma file as a reference for the component design
-- We pass props to the component to customize the design as well as handlers
-- We pass children component props to children components (our props essentially parallel the component hierarchy)
-
-Example: 
-
-type TButtonProps = {
-  textProps: TTextProps;
-  onClick: () => void;
-}
-
-const Button: React.FC<TButtonProps> = ({ textProps, onClick }) => {
-  return <button onClick={onClick}><Text {...textProps} /></button>
-}
-
-type TTextProps = {
-  text: string;
-  color: string;
-}
-
-const Text: React.FC<TTextProps> = ({ text, color }) => {
-  return <p className={twMerge("text-sm", color)}>{text}</p>
-}
 `;
 
 

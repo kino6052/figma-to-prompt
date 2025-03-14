@@ -1,0 +1,232 @@
+.plan {
+  width: 335px;
+  align-self: stretch;
+
+  .gb-info {
+    width: 335px;
+    height: 125.303px;
+    border-radius: 0 0 20px 20px;
+    background: var(--background-secondary, #FFF);
+
+    .gift {
+      width: 80px;
+      height: 80px;
+      flex-shrink: 0;
+
+      .vector {
+        width: 17.8px;
+        height: 18.8px;
+        flex-shrink: 0;
+        fill: var(--icon-primary, #28303F);
+      }
+    }
+
+    .frame {
+      display: inline-flex;
+      align-items: center;
+      gap: 22px;
+
+      .title {
+        color: var(--text-primary, #28303F);
+        font-family: "Beeline Sans";
+        font-size: 40px;
+        font-weight: 400;
+        line-height: 52px;
+      }
+
+      .subtitle {
+        color: var(--text-primary, #28303F);
+        font-family: "Beeline Sans";
+        font-size: 16px;
+        font-weight: 500;
+        line-height: 20px;
+      }
+    }
+  }
+
+  .card2 {
+    width: 335px;
+    height: 454.708px;
+    border-radius: 20px;
+    background: var(--background-secondary-invert, #222731);
+
+    .bg-image {
+      display: inline-flex;
+      padding: 16px 30px 94px 181px;
+      justify-content: flex-end;
+      align-items: center;
+      border-radius: 20px;
+    }
+
+    .price-button {
+      display: flex;
+      width: 287px;
+      justify-content: space-between;
+      align-items: center;
+
+      .price {
+        width: 120px;
+        color: var(--text-primary-invert, #FFF);
+        font-family: "Beeline Sans";
+        font-size: 16px;
+        font-weight: 400;
+        line-height: 20px;
+      }
+
+      .button-small {
+        display: flex;
+        height: 44px;
+        min-width: 105px;
+        padding: 12px 20px;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 10px;
+        border-radius: 40px;
+        background: #FFC800;
+
+        .button-content {
+          display: -webkit-box;
+          -webkit-box-orient: vertical;
+          -webkit-line-clamp: 1;
+          flex: 1 0 0;
+          overflow: hidden;
+          color: #28303F;
+          text-align: center;
+          text-overflow: ellipsis;
+          font-family: "Beeline Sans";
+          font-size: 18px;
+          font-weight: 400;
+          line-height: 22px;
+        }
+      }
+    }
+
+    .tag-gb-min {
+      display: flex;
+      width: 322px;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 8px;
+
+      .tag {
+        display: flex;
+        padding: 6px 12px;
+        justify-content: center;
+        align-items: flex-start;
+        gap: 4px;
+        border-radius: 50px;
+        background: var(--background-secondary, #FFF);
+
+        .text {
+          color: var(--text-primary, #28303F);
+          font-family: "Beeline Sans";
+          font-size: 16px;
+          font-weight: 400;
+          line-height: 20px;
+        }
+      }
+
+      .title {
+        align-self: stretch;
+        color: var(--text-primary-invert, #FFF);
+        font-family: "Beeline Sans";
+        font-size: 24px;
+        font-weight: 400;
+        line-height: 24px;
+      }
+    }
+
+    .dtm {
+      display: inline-flex;
+      align-items: flex-start;
+      gap: 40px;
+
+      .traffic {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+
+        .text {
+          width: 180px;
+          color: var(--text-secondary-invert, #C8CED9);
+          font-family: "Beeline Sans";
+          font-size: 16px;
+          font-weight: 400;
+          line-height: 20px;
+        }
+
+        .avatar-group {
+          display: flex;
+          align-items: flex-start;
+          align-content: flex-start;
+          gap: 8px -8px;
+          flex-wrap: wrap;
+        }
+      }
+
+      .services {
+        display: flex;
+        padding-right: 16px;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+
+        .text {
+          color: var(--text-secondary-invert, #C8CED9);
+          font-family: "Beeline Sans";
+          font-size: 16px;
+          font-weight: 400;
+          line-height: 20px;
+        }
+
+        .avatars {
+          display: flex;
+          align-items: flex-start;
+          align-content: flex-start;
+          gap: 0px -8px;
+          flex-wrap: wrap;
+
+          .icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 100px;
+
+            .ellipse {
+              width: 32px;
+              height: 32px;
+              flex-shrink: 0;
+              fill: var(--brand-primary, #FFC800);
+            }
+
+            .phone {
+              width: 20px;
+              height: 20px;
+              flex-shrink: 0;
+
+              .vector {
+                width: 15px;
+                height: 15px;
+                flex-shrink: 0;
+                fill: var(--icon-primary, #28303F);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    .info {
+      width: 24px;
+      height: 24px;
+      flex-shrink: 0;
+
+      .vector {
+        width: 18px;
+        height: 18px;
+        flex-shrink: 0;
+        fill: var(--icon-primary, #28303F);
+      }
+    }
+  }
+} 

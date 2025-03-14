@@ -3,11 +3,9 @@
   "id": "1472500839255536427",
   "api": "1.0.0",
   "main": "code.js",
-  "capabilities": [
-  ],
-  "enableProposedApi": false,
-  "documentAccess": "dynamic-page",
+  "capabilities": ["inspect", "vscode"],
   "editorType": [
+    "dev",
     "figma"
   ],
   "networkAccess": {
