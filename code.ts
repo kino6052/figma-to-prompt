@@ -1,80 +1,92 @@
-export const getClipboardHtml = () => `
-  <!DOCTYPE html>
-  <html>
-    <head>
-      <meta charset="utf-8">
-      <title>Copy Prompt</title>
-    </head>
-    <body>
-      <script>
-        window.onmessage = async (event) => {
-          const { type, text } = event.data.pluginMessage;
-          if (type === 'copy') {
-            try {
-              await navigator.clipboard.writeText(text);
-              parent.postMessage({ pluginMessage: { type: 'complete' } }, '*');
-            } catch (err) {
-              console.error('Failed to copy: ', err);
-              parent.postMessage({ pluginMessage: { type: 'error', message: err.message } }, '*');
-            }
+const getClipboardHtml = () => `
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Copy Prompt</title>
+  </head>
+  <body>
+    <script>
+      window.onmessage = async (event) => {
+        const { type, text } = event.data.pluginMessage;
+        if (type === 'copy') {
+          try {
+            await navigator.clipboard.writeText(text);
+            parent.postMessage({ pluginMessage: { type: 'complete' } }, '*');
+          } catch (err) {
+            console.error('Failed to copy: ', err);
+            parent.postMessage({ pluginMessage: { type: 'error', message: err.message } }, '*');
           }
-        };
-      </script>
-    </body>
-  </html>
+        }
+      };
+    </script>
+  </body>
+</html>
 `;
 
-export async function extractDescription(node: BaseNode): Promise<string> {
+async function extractDescription(node) {
   if (node.type === "INSTANCE") {
     const mainComponent = await node.getMainComponentAsync();
-    return mainComponent?.description ?? "No description provided";
+    return mainComponent?.description || "No description provided";
   }
-  if ("description" in node && node.description) {
-    return node.description;
-  }
-  return "No description provided in the selected component.";
+  return "description" in node && node.description
+    ? node.description
+    : "No description provided in the selected component.";
 }
 
-export function extractLinks(description: string): string {
-  const urlRegex = /(https?:\/\/[^\s]+)/g;
-  const linksArray = description.match(urlRegex);
-  return linksArray ? linksArray.join(", ") : "No links found";
+function extractLinks(description) {
+  const links = description.match(/(https?:\/\/[^\s]+)/g);
+  return links ? links.join(", ") : "No links found";
 }
 
-export function extractStyleInfo(node: SceneNode): StyleInfo {
-  const styles: StyleInfo = {
+async function extractStyleInfo(node) {
+  const styles = {
     fills: "No fill styles",
     strokes: "No stroke styles",
     autoLayout: "Not auto layout",
     paddings: "No padding info",
     position: `x: ${node.x}, y: ${node.y}`,
     size: `width: ${node.width}, height: ${node.height}`,
+    fontFamily: "No font family",
+    fontSize: "No font size",
   };
 
-  if ("fills" in node && node.fills) {
-    try {
-      styles.fills = Array.isArray(node.fills)
-        ? node.fills.map((fill) => JSON.stringify(fill)).join(", ")
-        : JSON.stringify(node.fills);
-    } catch (e) {
-      styles.fills = "Could not parse fills";
+  const processPaints = async (paints: Paint[]) => {
+    if (!Array.isArray(paints)) return JSON.stringify(paints);
+    const processed = await Promise.all(
+      paints.map(async (paint) => {
+        return JSON.stringify(paint);
+      })
+    );
+    return processed.join(", ");
+  };
+
+  try {
+    if ("fills" in node && node.fills) {
+      styles.fills = await processPaints(node.fills);
     }
+  } catch (e) {
+    console.error(e);
+    styles.fills = "Could not parse fills";
   }
 
-  if ("strokes" in node && node.strokes) {
-    try {
-      styles.strokes = Array.isArray(node.strokes)
-        ? node.strokes.map((stroke) => JSON.stringify(stroke)).join(", ")
-        : JSON.stringify(node.strokes);
-    } catch (e) {
-      styles.strokes = "Could not parse strokes";
+  try {
+    if ("strokes" in node && node.strokes) {
+      styles.strokes = await processPaints(node.strokes);
     }
+  } catch (e) {
+    console.error(e);
+    styles.strokes = "Could not parse strokes";
+  }
+
+  // handle font family
+  if ("fontName" in node) {
+    styles.fontFamily = JSON.stringify(node.fontName);
   }
 
   if ("layoutMode" in node) {
-    const frameNode = node as FrameNode;
     styles.autoLayout =
-      frameNode.layoutMode !== "NONE" ? frameNode.layoutMode : "No auto layout";
+      node.layoutMode !== "NONE" ? node.layoutMode : "No auto layout";
   }
 
   if (
@@ -83,14 +95,18 @@ export function extractStyleInfo(node: SceneNode): StyleInfo {
     "paddingTop" in node &&
     "paddingBottom" in node
   ) {
-    const frameNode = node as FrameNode;
-    styles.paddings = `Top: ${frameNode.paddingTop}px, Right: ${frameNode.paddingRight}px, Bottom: ${frameNode.paddingBottom}px, Left: ${frameNode.paddingLeft}px`;
+    styles.paddings = `Top: ${node.paddingTop}px, Right: ${node.paddingRight}px, Bottom: ${node.paddingBottom}px, Left: ${node.paddingLeft}px`;
+  }
+
+  // handle font size
+  if ("fontSize" in node) {
+    styles.fontSize = node.fontSize;
   }
 
   return styles;
 }
 
-export function getProjectDescription(): string {
+function getProjectDescription() {
   const selected = figma.currentPage.selection[0];
   const container = selected.parent ? selected.parent : selected;
 
@@ -100,183 +116,136 @@ export function getProjectDescription(): string {
     container.description.includes("DESCRIPTION:")
   ) {
     const parts = container.description.split("DESCRIPTION:");
-    if (parts.length > 1) {
-      return parts[1].trim();
-    }
+    if (parts.length > 1) return parts[1].trim();
   }
 
-  const descriptionNode = (container as FrameNode).findOne(
+  const descriptionNode = container.findOne(
     (node) =>
       node.type === "TEXT" &&
       "characters" in node &&
       node.characters.includes("DESCRIPTION:")
-  ) as TextNode | null;
-
+  );
   if (descriptionNode) {
     const parts = descriptionNode.characters.split("DESCRIPTION:");
-    if (parts.length > 1) {
-      return parts[1].trim();
-    }
+    if (parts.length > 1) return parts[1].trim();
   }
 
   return DEFAULT_DESCRIPTION;
 }
 
-export function generatePrompt(metadata: DesignMetadata): string {
+function generatePrompt(metadata) {
   return `
-  Project Description: ${getProjectDescription()}
+Project Description: ${getProjectDescription()}
 
-  General Guideline for creating a React component: ${COMPONENT_GUIDELINES}
+General Guideline for creating a React component: ${COMPONENT_GUIDELINES}
 
-  Description: ${metadata.description}
+Description: ${metadata.description}
 
-  Links: ${metadata.links}
+Links: ${metadata.links}
 
-  Note: The links provided may reference pre-existing components. Please adjust the generated component accordingly.
+Note: The links provided may reference pre-existing components. Please adjust the generated component accordingly.
 
-  Styles:
-  - Fills: ${metadata.styles.fills}
-  - Strokes: ${metadata.styles.strokes}
+Styles: ${JSON.stringify(metadata.styles)}
 
-  Structure (child components):
-  ${metadata.structure}
+Structure (child components):
+${metadata.structure}
 
-  Please use appropriate HTML and CSS to mimic the layout and design.
+Please use appropriate HTML and CSS to mimic the layout and design.
 
-  Create a React component that replicates the Figma design mentioned above.
-  Also create an example of how to use the component in a React application (as a propless component).
-  `;
+Create a React component that replicates the Figma design mentioned above.
+Also create an example of how to use the component in a React application (as a propless component).
+`;
 }
+async function getRecursiveStructure(node, depth = 1) {
+  const indent = "  ".repeat(depth);
+  const lines = [
+    `${indent}- ${node.type}${node.name ? ` (${node.name})` : ""}`,
+    `${indent}- Position: ${node.x}, ${node.y}`,
+  ];
 
-const getBasicNodeInfo = (node: SceneNode, indentation: string) => {
-  return `${indentation}- ${node.type}${node.name ? ` (${node.name})` : ""}`;
-};
-
-const getPositionAndSizeInfo = (node: SceneNode, indentation: string) => {
-  return `${indentation}- Position: ${node.x}, ${node.y}`;
-};
-
-const getDescriptionInfo = (node: SceneNode, indentation: string) => {
-  return `${indentation}- Description: ${node.description}`;
-};
-
-const getNodeTypeSpecificInfo = (node: SceneNode, indentation: string) => {
-  return `${indentation}- Node Type Specific Info: ${node.type}`;
-};
-
-const getConstraintsInfo = (
-  node: SceneNode,
-  indentation: string,
-  styleIndentation: string
-) => {
-  return `${indentation}- Constraints: ${node.constraints}`;
-};
-
-export async function getRecursiveStructure(
-  node: SceneNode,
-  depth: number = 1
-): Promise<string> {
-  const indentation = "  ".repeat(depth);
-  const styleIndentation = "  ".repeat(depth + 1);
-  const lines: string[] = [];
-
-  // Add basic node info
-  lines.push(
-    `${indentation}- ${node.type}${node.name ? ` (${node.name})` : ""}`
-  );
-
-  // Add position and size info
-  lines.push(...getBasicNodeInfo(node, indentation));
-
-  // Add description and links
   if ("description" in node && node.description) {
-    lines.push(...getDescriptionInfo(node, indentation));
+    lines.push(`${indent}- Description: ${node.description}`);
   }
-
-  // Add node-specific metadata
+  lines.push(`${indent}- Node Type Specific Info: ${node.type}`);
   lines.push(
-    ...(await getNodeTypeSpecificInfo(node, indentation, styleIndentation))
+    `${indent}- Node Styles: ${JSON.stringify(await extractStyleInfo(node))}`
   );
 
-  // Add constraints
   if ("constraints" in node) {
-    lines.push(getConstraintsInfo(node, indentation, styleIndentation));
+    lines.push(`${indent}- Constraints: ${JSON.stringify(node.constraints)}`);
   }
 
-  // Add children
-  if ("children" in node && node.children?.length > 0) {
-    const childrenStructures = await Promise.all(
-      node.children.map((child) => getRecursiveStructure(child, depth + 1))
-    );
-    lines.push(...childrenStructures);
+  // If the node is an instance, extract its structure.
+  if (node.type === "INSTANCE") {
+    const mainComponent = await node.getMainComponentAsync();
+    if (mainComponent) {
+      lines.push(`${indent}- Component Reference: ${mainComponent.name}`);
+      // If the instance has overridden children, process them.
+      if (node.children && node.children.length > 0) {
+        for (const child of node.children) {
+          lines.push(await getRecursiveStructure(child, depth + 1));
+        }
+      }
+      // Otherwise, use the main component's children.
+      else if (mainComponent.children && mainComponent.children.length > 0) {
+        for (const child of mainComponent.children) {
+          lines.push(await getRecursiveStructure(child, depth + 1));
+        }
+      }
+    }
+  }
+  // For all other node types that have children.
+  else if ("children" in node && node.children && node.children.length > 0) {
+    for (const child of node.children) {
+      lines.push(await getRecursiveStructure(child, depth + 1));
+    }
   }
 
   return lines.join("\n");
 }
 
-export async function extractStructureInfo(node: SceneNode): Promise<string> {
+async function extractStructureInfo(node) {
   if ("children" in node && node.children && node.children.length > 0) {
-    const childStructures = await Promise.all(
+    const structures = await Promise.all(
       node.children.map((child) => getRecursiveStructure(child, 1))
     );
-    return childStructures.join("\n");
+    return structures.join("\n");
   }
   return "No child structure found.";
 }
 
-export const DEFAULT_DESCRIPTION =
+const DEFAULT_DESCRIPTION =
   "This is figma design for real-world medium alternative Conduit app (also known as the mother of all apps).";
 
-export const COMPONENT_GUIDELINES = `
-  - We use typescript
-  - We only create view layer, no business logic or state management
-  - We use Tailwind CSS for styling
-  - We use React for the view layer
-  - We use the Figma file as a reference for the component design
-  - We pass props to the component to customize the design as well as handlers
-  - We pass children component props to children components (our props essentially parallel the component hierarchy)
+const COMPONENT_GUIDELINES = `
+- We use TypeScript
+- We only create view layer, no business logic or state management
+- We use Tailwind CSS for styling
+- We use React for the view layer
+- We use the Figma file as a reference for the component design
+- We pass props to the component to customize the design as well as handlers
+- We pass children component props to children components (our props essentially parallel the component hierarchy)
 
-  Example: 
-  
-  type TButtonProps = {
-    textProps: TTextProps;
-    onClick: () => void;
-  }
+Example: 
 
-  const Button: React.FC<TButtonProps> = ({ textProps, onClick }) => {
-    return <button onClick={onClick}><Text {...textProps} /></button>
-  }
+type TButtonProps = {
+  textProps: TTextProps;
+  onClick: () => void;
+}
 
-  type TTextProps = {
-    text: string;
-    color: string;
-  }
+const Button: React.FC<TButtonProps> = ({ textProps, onClick }) => {
+  return <button onClick={onClick}><Text {...textProps} /></button>
+}
 
-  const Text: React.FC<TTextProps> = ({ text, color }) => {
-    return <p className={twMerge("text-sm", color)}>{text}</p>
-  }
+type TTextProps = {
+  text: string;
+  color: string;
+}
+
+const Text: React.FC<TTextProps> = ({ text, color }) => {
+  return <p className={twMerge("text-sm", color)}>{text}</p>
+}
 `;
-
-export interface StyleInfo {
-  fills: string;
-  strokes: string;
-  autoLayout?: string;
-  paddings?: string;
-  position?: string;
-  size?: string;
-}
-
-export interface DesignMetadata {
-  description: string;
-  links: string;
-  styles: StyleInfo;
-  structure: string;
-}
-
-export interface NodeConstraints {
-  horizontal: string;
-  vertical: string;
-}
 
 async function main() {
   if (figma.currentPage.selection.length === 0) {
@@ -286,11 +255,11 @@ async function main() {
   }
 
   const selected = figma.currentPage.selection[0];
-
-  const metadata: DesignMetadata = {
-    description: await extractDescription(selected),
-    links: extractLinks(await extractDescription(selected)),
-    styles: extractStyleInfo(selected),
+  const description = await extractDescription(selected);
+  const metadata = {
+    description,
+    links: extractLinks(description),
+    styles: await extractStyleInfo(selected),
     structure: await extractStructureInfo(selected),
   };
 
@@ -299,9 +268,8 @@ async function main() {
   figma.notify("LLM prompt generated! Check the console for details.");
   console.log(prompt);
 
-  // Show a non-visible UI for clipboard operations
+  // Use a hidden UI to handle clipboard actions
   figma.showUI(getClipboardHtml(), { visible: false });
-
   figma.ui.onmessage = (msg) => {
     if (msg.type === "complete") {
       figma.notify("Prompt copied to clipboard!");
@@ -311,7 +279,6 @@ async function main() {
       figma.closePlugin();
     }
   };
-
   figma.ui.postMessage({ type: "copy", text: prompt });
 }
 
